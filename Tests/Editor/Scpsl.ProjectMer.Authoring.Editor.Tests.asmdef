@@ -1,0 +1,24 @@
+{
+  "name": "Scpsl.ProjectMer.Authoring.Editor.Tests",
+  "rootNamespace": "Scpsl.ProjectMer.Authoring.Editor.Tests",
+  "references": [
+    "Scpsl.ProjectMer.Authoring",
+    "Scpsl.ProjectMer.Authoring.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "com.scpsl.projectmer-authoring",
+  "version": "0.1.0",
+  "displayName": "Project MER Unity Exporter",
+  "description": "Import, validate, author, and export SCP:SL Project MER JSON schematics from Unity hierarchies.",
+  "unity": "2021.3",
+  "documentationUrl": "https://github.com/Michaelihc/projectmer-unity-exporter#readme",
+  "changelogUrl": "https://github.com/Michaelihc/projectmer-unity-exporter/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Michaelihc/projectmer-unity-exporter/blob/main/LICENSE",
+  "keywords": [
+    "scp-sl",
+    "project-mer",
+    "map-editor-reborn",
+    "schematic",
+    "exporter"
+  ],
+  "author": {
+    "name": "Michaelihc",
+    "url": "https://github.com/Michaelihc"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.2"
+  }
+}
