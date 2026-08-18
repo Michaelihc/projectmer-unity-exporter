@@ -19,6 +19,7 @@
 - 几何体颜色、可见、碰撞和静态/可移动标志
 - Project MER Animator 名称字段
 - 导入现有 Project MER JSON 进行编辑或检查
+- 导入并再次导出时，无损保留尚未建模的属性和不支持的游戏逻辑块类型
 - 写入文件前的严格检查
 
 ## 不支持内容
@@ -50,20 +51,20 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 5. 输入：
 
    ```text
-   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.0
+   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1
    ```
 
 6. 点击 **Install**，等待 Unity 编译完成。
 7. 确认顶部菜单中出现 **Tools → ProjectMER**。
 
-使用 `#v0.1.0` 可以确保朋友或团队成员安装完全相同的版本。如果希望直接跟随最新 `main` 分支，可以删除版本后缀，但不建议在正式项目中这样做。
+使用 `#v0.1.1` 可以确保朋友或团队成员安装完全相同的版本。如果希望直接跟随最新 `main` 分支，可以删除版本后缀，但不建议在正式项目中这样做。
 
 ### 修改 `Packages/manifest.json` 安装
 
 在项目 `Packages/manifest.json` 的 `dependencies` 对象中加入：
 
 ```json
-"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.0"
+"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1"
 ```
 
 如果它不是第一项，注意上一项末尾必须有英文逗号，保证 JSON 格式正确。
@@ -153,7 +154,7 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 3. 工具会在当前场景中建立可编辑的 Unity 层级。
 4. 在 Console 中检查警告。
 
-受支持的块会还原为 Unity 基础几何体、灯光、文字预览或空节点。未知块类型会尽可能保留为只有 Transform 的占位节点，并给出警告。预览材质只在内存中临时创建，不会写入项目资源。
+受支持的块会还原为 Unity 基础几何体、灯光、文字预览或空节点。未知块类型会成为只有 Transform 的占位节点并给出警告，但其原始块类型和属性会存入隐藏元数据，以便再次导出。受支持块上的额外属性也会保留，因此 `MovementSmoothing`、灯光闪烁设置以及未来新增的 Project MER 属性都能通过导入/导出往返保存。预览材质只在内存中临时创建，不会写入项目资源。
 
 ## 常见问题
 
@@ -186,7 +187,7 @@ Unity 会自动给内置基础几何体添加 Collider，但本工具把 Project
 
 ### 导入结果与游戏中的蓝图不完全一致
 
-导入功能主要用于制作和预览。不支持的 Project MER 块会成为占位节点，Unity 的材质与灯光也无法完全复现 SCP:SL 的最终画面。发布前必须在私人 SCP:SL 测试服务器中进行最终检查。
+导入功能主要用于制作和预览。不支持的 Project MER 块会成为占位节点，无法在 Unity 中可视化配置，但其源属性会保留以便再次导出。若将占位节点主动转换为其他块类型，其原有类型专属数据会被替换。Unity 的材质与灯光也无法完全复现 SCP:SL 的最终画面。发布前必须在私人 SCP:SL 测试服务器中进行最终检查。
 
 ## 自动化 API
 

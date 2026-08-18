@@ -19,6 +19,7 @@ It turns a selected Unity hierarchy made from supported primitives, lights, text
 - Primitive color, visibility, collision, and static/movable flags
 - Project MER animator names
 - Importing existing Project MER JSON for editing or inspection
+- Lossless pass-through of unmodeled properties and unsupported gameplay block types during import/re-export
 - Strict validation before a file is written
 
 ## What it cannot export
@@ -50,20 +51,20 @@ The package depends on Unity's `com.unity.nuget.newtonsoft-json` package, which 
 5. Enter:
 
    ```text
-   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.0
+   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1
    ```
 
 6. Click **Install** and wait for Unity to finish compiling.
 7. Confirm that **Tools → ProjectMER** appears in the Unity menu bar.
 
-Pinning `#v0.1.0` keeps every team member on the same version. To follow the latest `main` branch instead, omit the suffix.
+Pinning `#v0.1.1` keeps every team member on the same version. To follow the latest `main` branch instead, omit the suffix.
 
 ### Install by editing `Packages/manifest.json`
 
 Add this entry inside the project's `dependencies` object:
 
 ```json
-"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.0"
+"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1"
 ```
 
 Remember to add a comma to the preceding entry when required by JSON syntax.
@@ -153,7 +154,7 @@ Project MER's current documentation places maps and schematics under `LabAPI/con
 3. The package creates an editable hierarchy in the current scene.
 4. Inspect any warnings in the Console.
 
-Supported blocks become Unity primitives, lights, text previews, or empty transforms. Unknown block types are preserved as transform-only placeholders when possible, with a warning. Temporary preview materials are generated in memory and are not saved as project assets.
+Supported blocks become Unity primitives, lights, text previews, or empty transforms. Unknown block types become transform-only placeholders with a warning, but their original block type and properties are stored in hidden metadata for re-export. Extra properties on supported blocks are also retained, so fields such as `MovementSmoothing`, light flicker settings, and future Project MER properties survive a round trip. Temporary preview materials are generated in memory and are not saved as project assets.
 
 ## Troubleshooting
 
@@ -186,7 +187,7 @@ Unity adds colliders automatically to built-in primitives, but this exporter tre
 
 ### The imported hierarchy does not exactly match the original schematic
 
-The importer is an authoring preview. Unsupported Project MER block types become placeholders, and Unity materials/lights cannot reproduce every SCP:SL rendering detail exactly. Always perform the final check on a private SCP:SL test server.
+The importer is an authoring preview. Unsupported Project MER block types become placeholders and cannot be configured visually in Unity, although their source properties are preserved for re-export. Converting a placeholder to another block kind intentionally replaces its original type-specific data. Unity materials/lights cannot reproduce every SCP:SL rendering detail exactly. Always perform the final check on a private SCP:SL test server.
 
 ## Automation API
 

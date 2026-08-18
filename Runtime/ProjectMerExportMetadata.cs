@@ -39,6 +39,15 @@ namespace Scpsl.ProjectMer.Authoring
     [AddComponentMenu("ProjectMER/Export Metadata")]
     public sealed class ProjectMerExportMetadata : MonoBehaviour
     {
+        [SerializeField, HideInInspector]
+        private bool hasImportedSource;
+
+        [SerializeField, HideInInspector]
+        private int importedBlockType;
+
+        [SerializeField, HideInInspector]
+        private string importedPropertiesJson = string.Empty;
+
         [Tooltip("Auto infers built-in primitives, supported Unity lights, or an empty transform.")]
         public MerBlockKind BlockKind = MerBlockKind.Auto;
 
@@ -70,5 +79,26 @@ namespace Scpsl.ProjectMer.Authoring
         [TextArea(2, 8)]
         public string Text = "Custom Text";
         public Vector2 DisplaySize = new Vector2(200f, 50f);
+
+        /// <summary>
+        /// True when this object was imported with source properties that should be preserved
+        /// if it is exported as the same Project MER block type.
+        /// </summary>
+        public bool HasImportedSource { get { return hasImportedSource; } }
+
+        public int ImportedBlockType { get { return importedBlockType; } }
+
+        public string ImportedPropertiesJson { get { return importedPropertiesJson ?? string.Empty; } }
+
+        /// <summary>
+        /// Records lossless source data for editor import/export round trips. Known Unity-editable
+        /// properties are merged over these values during export.
+        /// </summary>
+        public void SetImportedSource(int blockType, string propertiesJson)
+        {
+            hasImportedSource = true;
+            importedBlockType = blockType;
+            importedPropertiesJson = string.IsNullOrEmpty(propertiesJson) ? "{}" : propertiesJson;
+        }
     }
 }

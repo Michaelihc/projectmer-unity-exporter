@@ -53,6 +53,8 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             public int BlockType;
             public ImportProperties Properties = new ImportProperties();
             [NonSerialized] public bool HasColorRgba;
+            [NonSerialized] public bool HasSourceProperties;
+            [NonSerialized] public string SourcePropertiesJson;
         }
 
         [Serializable]
@@ -285,6 +287,11 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                     block.Properties = new ImportProperties();
                 JToken propertiesToken = jsonBlocks[i]["Properties"];
                 block.HasColorRgba = propertiesToken != null && propertiesToken["ColorRgba"] is JObject;
+                if (propertiesToken is JObject propertiesObject)
+                {
+                    block.HasSourceProperties = true;
+                    block.SourcePropertiesJson = propertiesObject.ToString(Newtonsoft.Json.Formatting.None);
+                }
             }
 
             if (!plan.BlocksById.ContainsKey(document.RootObjectId))
@@ -401,7 +408,7 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                     if (block.BlockType != BlockEmpty)
                     {
                         warnings.Add(string.Format(CultureInfo.InvariantCulture,
-                            "'{0}' (ObjectId {1}) uses unsupported BlockType {2}; loaded as a transform-only placeholder.",
+                            "'{0}' (ObjectId {1}) uses unsupported BlockType {2}; loaded as a transform-only placeholder with its source properties preserved for re-export.",
                             NameOf(block), block.ObjectId, block.BlockType));
                     }
                     break;
@@ -494,6 +501,8 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             metadata.ObjectId = block.ObjectId;
             metadata.AnimatorName = block.AnimatorName ?? string.Empty;
             metadata.Static = block.Properties.Static;
+            if (block.HasSourceProperties)
+                metadata.SetImportedSource(block.BlockType, block.SourcePropertiesJson);
 
             switch (block.BlockType)
             {
@@ -534,7 +543,11 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             if (block.HasColorRgba && block.Properties.ColorRgba != null)
                 return block.Properties.ColorRgba.ToColor();
 
-            if (ColorUtility.TryParseHtmlString(block.Properties.Color ?? string.Empty, out Color color))
+            string colorText = block.Properties.Color ?? string.Empty;
+            if (!string.IsNullOrEmpty(colorText) && colorText[0] != '#')
+                colorText = "#" + colorText;
+
+            if (ColorUtility.TryParseHtmlString(colorText, out Color color))
                 return color;
 
             if (warnings != null)

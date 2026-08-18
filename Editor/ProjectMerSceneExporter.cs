@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Scpsl.ProjectMer.Authoring;
 using UnityEditor;
 using UnityEngine;
@@ -197,6 +199,7 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             };
 
             ValidateTransform(root, node, plan);
+            ValidateImportedSource(root, node, plan);
             if (kind == MerBlockKind.Primitive)
                 ResolvePrimitiveType(root, node, plan);
             else if (kind == MerBlockKind.Light)
@@ -207,6 +210,24 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             plan.Nodes.Add(node);
             for (int i = 0; i < current.childCount; i++)
                 Gather(root, current.GetChild(i), plan);
+        }
+
+        private static void ValidateImportedSource(Transform root, ExportNode node, ExportPlan plan)
+        {
+            if (node.Metadata == null || !node.Metadata.HasImportedSource)
+                return;
+
+            try
+            {
+                JToken token = JToken.Parse(node.Metadata.ImportedPropertiesJson);
+                if (!(token is JObject))
+                    plan.Errors.Add(PathOf(root, node.Transform) + ": preserved ProjectMER Properties data is not a JSON object.");
+            }
+            catch (Exception exception)
+            {
+                plan.Errors.Add(PathOf(root, node.Transform) +
+                    ": preserved ProjectMER Properties data is invalid JSON: " + exception.Message);
+            }
         }
 
         private static MerBlockKind ResolveKind(
@@ -405,6 +426,7 @@ namespace Scpsl.ProjectMer.Authoring.Editor
         {
             Transform transform = node.Transform;
             ProjectMerExportMetadata metadata = node.Metadata;
+            int blockType = BlockTypeOf(node);
             json.Append("    {\n");
             WriteStringProperty(json, 6, "Name", transform.name, true);
             WriteNumberProperty(json, 6, "ObjectId", node.ObjectId, true);
@@ -413,52 +435,90 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             WriteVector3Property(json, 6, "Position", transform.localPosition, true);
             WriteVector3Property(json, 6, "Rotation", transform.localEulerAngles, true);
             WriteVector3Property(json, 6, "Scale", transform.localScale, true);
-            WriteNumberProperty(json, 6, "BlockType", BlockTypeOf(node.Kind), true);
-            json.Append("      \"Properties\": {\n");
+            WriteNumberProperty(json, 6, "BlockType", blockType, true);
+            Indent(json, 6).Append("\"Properties\": ");
+            AppendJsonToken(json, PropertiesOf(node, blockType), 6);
+            json.Append("\n    }");
+        }
+
+        private static int BlockTypeOf(ExportNode node)
+        {
+            int blockType;
+            switch (node.Kind)
+            {
+                case MerBlockKind.Primitive: blockType = BlockPrimitive; break;
+                case MerBlockKind.Light: blockType = BlockLight; break;
+                case MerBlockKind.Text: blockType = BlockText; break;
+                default: blockType = BlockEmpty; break;
+            }
+
+            if (blockType == BlockEmpty && node.Metadata != null && node.Metadata.HasImportedSource &&
+                node.Metadata.ImportedBlockType != BlockEmpty)
+            {
+                return node.Metadata.ImportedBlockType;
+            }
+
+            return blockType;
+        }
+
+        private static JObject PropertiesOf(ExportNode node, int blockType)
+        {
+            JObject properties = new JObject();
+            ProjectMerExportMetadata metadata = node.Metadata;
+            if (metadata != null && metadata.HasImportedSource && metadata.ImportedBlockType == blockType)
+                properties = JObject.Parse(metadata.ImportedPropertiesJson);
 
             switch (node.Kind)
             {
                 case MerBlockKind.Primitive:
-                    WriteNumberProperty(json, 8, "PrimitiveType", (int)node.PrimitiveType, true);
-                    WriteStringProperty(json, 8, "Color", ColorOf(node), true);
-                    WriteNumberProperty(json, 8, "PrimitiveFlags", FlagsOf(node), true);
-                    WriteBoolProperty(json, 8, "Static", IsStatic(node), false);
+                    properties["PrimitiveType"] = (int)node.PrimitiveType;
+                    properties["Color"] = ColorOf(node);
+                    properties["PrimitiveFlags"] = FlagsOf(node);
+                    UpdateColorRgbaIfPresent(properties, node);
                     break;
                 case MerBlockKind.Light:
-                    Light light = transform.GetComponent<Light>();
-                    WriteStringProperty(json, 8, "Color", ColorOf(node), true);
-                    WriteFloatProperty(json, 8, "Intensity", light.intensity, true);
-                    WriteFloatProperty(json, 8, "Range", light.range, true);
-                    WriteNumberProperty(json, 8, "ShadowType", (int)light.shadows, true);
-                    WriteFloatProperty(json, 8, "ShadowStrength", light.shadowStrength, true);
-                    WriteNumberProperty(json, 8, "LightType", (int)light.type, true);
-                    WriteNumberProperty(json, 8, "Shape", metadata == null ? 0 : (int)metadata.LightShape, true);
-                    WriteFloatProperty(json, 8, "SpotAngle", light.spotAngle, true);
-                    WriteFloatProperty(json, 8, "InnerSpotAngle", light.innerSpotAngle, true);
-                    WriteBoolProperty(json, 8, "Static", IsStatic(node), false);
+                    Light light = node.Transform.GetComponent<Light>();
+                    properties["Color"] = ColorOf(node);
+                    properties["Intensity"] = light.intensity;
+                    properties["Range"] = light.range;
+                    properties["ShadowType"] = (int)light.shadows;
+                    properties["ShadowStrength"] = light.shadowStrength;
+                    properties["LightType"] = (int)light.type;
+                    properties["Shape"] = metadata == null ? 0 : (int)metadata.LightShape;
+                    properties["SpotAngle"] = light.spotAngle;
+                    properties["InnerSpotAngle"] = light.innerSpotAngle;
+                    UpdateColorRgbaIfPresent(properties, node);
                     break;
                 case MerBlockKind.Text:
-                    WriteStringProperty(json, 8, "Text", metadata.Text ?? string.Empty, true);
-                    WriteVector2Property(json, 8, "DisplaySize", metadata.DisplaySize, true);
-                    WriteBoolProperty(json, 8, "Static", IsStatic(node), false);
-                    break;
-                default:
-                    WriteBoolProperty(json, 8, "Static", IsStatic(node), false);
+                    properties["Text"] = metadata.Text ?? string.Empty;
+                    properties["DisplaySize"] = Vector2Token(metadata.DisplaySize);
                     break;
             }
 
-            json.Append("      }\n    }");
+            properties["Static"] = IsStatic(node);
+            return properties;
         }
 
-        private static int BlockTypeOf(MerBlockKind kind)
+        private static void UpdateColorRgbaIfPresent(JObject properties, ExportNode node)
         {
-            switch (kind)
-            {
-                case MerBlockKind.Primitive: return BlockPrimitive;
-                case MerBlockKind.Light: return BlockLight;
-                case MerBlockKind.Text: return BlockText;
-                default: return BlockEmpty;
-            }
+            if (!(properties["ColorRgba"] is JObject))
+                return;
+
+            Color color = ColorValueOf(node);
+            JObject rgba = new JObject();
+            rgba["r"] = color.r;
+            rgba["g"] = color.g;
+            rgba["b"] = color.b;
+            rgba["a"] = color.a;
+            properties["ColorRgba"] = rgba;
+        }
+
+        private static JObject Vector2Token(Vector2 value)
+        {
+            JObject token = new JObject();
+            token["x"] = value.x;
+            token["y"] = value.y;
+            return token;
         }
 
         private static int FlagsOf(ExportNode node)
@@ -480,13 +540,18 @@ namespace Scpsl.ProjectMer.Authoring.Editor
 
         private static string ColorOf(ExportNode node)
         {
+            return "#" + ColorUtility.ToHtmlStringRGBA(ColorValueOf(node));
+        }
+
+        private static Color ColorValueOf(ExportNode node)
+        {
             if (node.Metadata != null && node.Metadata.OverrideColor)
-                return "#" + ColorUtility.ToHtmlStringRGBA(node.Metadata.Color);
+                return node.Metadata.Color;
 
             if (node.Kind == MerBlockKind.Light)
             {
                 Light light = node.Transform.GetComponent<Light>();
-                return "#" + ColorUtility.ToHtmlStringRGBA(light.color);
+                return light.color;
             }
 
             Renderer renderer = node.Transform.GetComponent<Renderer>();
@@ -497,13 +562,22 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                     if (material == null)
                         continue;
                     if (material.HasProperty("_BaseColor"))
-                        return "#" + ColorUtility.ToHtmlStringRGBA(material.GetColor("_BaseColor"));
+                        return material.GetColor("_BaseColor");
                     if (material.HasProperty("_Color"))
-                        return "#" + ColorUtility.ToHtmlStringRGBA(material.GetColor("_Color"));
+                        return material.GetColor("_Color");
                 }
             }
 
-            return "#FFFFFFFF";
+            return Color.white;
+        }
+
+        private static void AppendJsonToken(StringBuilder json, JToken token, int continuationIndent)
+        {
+            string formatted = token.ToString(Formatting.Indented)
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+            string indentation = new string(' ', continuationIndent);
+            json.Append(formatted.Replace("\n", "\n" + indentation));
         }
 
         private static void LogReport(string rootName, ExportPlan plan)
