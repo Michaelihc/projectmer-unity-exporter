@@ -119,6 +119,62 @@ namespace Scpsl.ProjectMer.Authoring.Editor.Tests
             Assert.That(overridden.Json, Does.Contain("\"PrimitiveType\": 3"));
         }
 
+        [Test]
+        public void AutomaticallyAssignsUniqueExportIdsForDuplicatedMetadata()
+        {
+            GameObject root = CreateObject("root");
+            GameObject original = CreateObject("original");
+            GameObject copy = CreateObject("copy");
+            original.transform.SetParent(root.transform, false);
+            copy.transform.SetParent(root.transform, false);
+            ProjectMerExportMetadata originalMetadata = original.AddComponent<ProjectMerExportMetadata>();
+            ProjectMerExportMetadata copyMetadata = copy.AddComponent<ProjectMerExportMetadata>();
+            originalMetadata.ObjectId = 42;
+            copyMetadata.ObjectId = 42;
+
+            ProjectMerExportResult first = ProjectMerSceneExporter.BuildHierarchyJson(root);
+            ProjectMerExportResult second = ProjectMerSceneExporter.BuildHierarchyJson(root);
+
+            Assert.That(first.Success, Is.True, string.Join("\n", first.Errors));
+            Assert.That(second.Success, Is.True, string.Join("\n", second.Errors));
+            Assert.That(first.Warnings.Count, Is.EqualTo(1));
+            Assert.That(first.Warnings[0], Does.Contain("automatically assigned 1"));
+
+            TestDocument firstDocument = JsonUtility.FromJson<TestDocument>(first.Json);
+            TestDocument secondDocument = JsonUtility.FromJson<TestDocument>(second.Json);
+            TestBlock firstOriginal = Array.Find(firstDocument.Blocks, item => item.Name == "original");
+            TestBlock firstCopy = Array.Find(firstDocument.Blocks, item => item.Name == "copy");
+            TestBlock secondCopy = Array.Find(secondDocument.Blocks, item => item.Name == "copy");
+            Assert.That(firstOriginal.ObjectId, Is.EqualTo(42));
+            Assert.That(firstCopy.ObjectId, Is.EqualTo(1));
+            Assert.That(secondCopy.ObjectId, Is.EqualTo(firstCopy.ObjectId));
+            Assert.That(originalMetadata.ObjectId, Is.EqualTo(42));
+            Assert.That(copyMetadata.ObjectId, Is.EqualTo(42));
+        }
+
+        [Test]
+        public void RepairsLaterDuplicateOverridesWithUndoCompatibleApi()
+        {
+            GameObject root = CreateObject("root");
+            GameObject original = CreateObject("original");
+            GameObject copy = CreateObject("copy");
+            original.transform.SetParent(root.transform, false);
+            copy.transform.SetParent(root.transform, false);
+            ProjectMerExportMetadata originalMetadata = original.AddComponent<ProjectMerExportMetadata>();
+            ProjectMerExportMetadata copyMetadata = copy.AddComponent<ProjectMerExportMetadata>();
+            originalMetadata.ObjectId = 42;
+            copyMetadata.ObjectId = 42;
+
+            int repaired = ProjectMerSceneExporter.RepairDuplicateObjectIds(root);
+
+            Assert.That(repaired, Is.EqualTo(1));
+            Assert.That(originalMetadata.ObjectId, Is.EqualTo(42));
+            Assert.That(copyMetadata.ObjectId, Is.EqualTo(-1));
+            ProjectMerExportResult result = ProjectMerSceneExporter.BuildHierarchyJson(root);
+            Assert.That(result.Success, Is.True, string.Join("\n", result.Errors));
+            Assert.That(result.Warnings, Is.Empty);
+        }
+
         private GameObject CreateObject(string name)
         {
             GameObject gameObject = new GameObject(name);

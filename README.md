@@ -20,6 +20,7 @@ It turns a selected Unity hierarchy made from supported primitives, lights, text
 - Project MER animator names
 - Importing existing Project MER JSON for editing or inspection
 - Lossless pass-through of unmodeled properties and unsupported gameplay block types during import/re-export
+- Automatic non-destructive recovery from Object ID collisions caused by duplicating Unity objects
 - Strict validation before a file is written
 
 ## What it cannot export
@@ -51,20 +52,20 @@ The package depends on Unity's `com.unity.nuget.newtonsoft-json` package, which 
 5. Enter:
 
    ```text
-   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1
+   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2
    ```
 
 6. Click **Install** and wait for Unity to finish compiling.
 7. Confirm that **Tools → ProjectMER** appears in the Unity menu bar.
 
-Pinning `#v0.1.1` keeps every team member on the same version. To follow the latest `main` branch instead, omit the suffix.
+Pinning `#v0.1.2` keeps every team member on the same version. To follow the latest `main` branch instead, omit the suffix.
 
 ### Install by editing `Packages/manifest.json`
 
 Add this entry inside the project's `dependencies` object:
 
 ```json
-"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1"
+"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2"
 ```
 
 Remember to add a comma to the preceding entry when required by JSON syntax.
@@ -107,7 +108,7 @@ Select an object and add **ProjectMER → Export Metadata** in the Inspector's *
 
 Other useful fields:
 
-- `Object Id`: leave at `-1` for automatic assignment. Explicit child IDs must be unique and greater than zero.
+- `Object Id`: leave at `-1` for automatic assignment. Explicit child IDs should be unique and greater than zero. If Unity duplication copies an explicit ID, validation/export keeps the first occurrence and gives later duplicates deterministic free IDs with a warning. Use **Tools → ProjectMER → Repair Duplicate Object IDs** to persist those later overrides as `-1` with Undo support.
 - `Animator Name`: writes Project MER's animator-name field. This does not export a Unity animation clip or controller.
 - `Override Color`: uses the metadata color instead of the first usable material color.
 - `Visible`: enables the primitive's visible flag.
@@ -184,6 +185,10 @@ Project MER primitives have one color, while Unity renderers may have multiple m
 ### Collision differs from Unity
 
 Unity adds colliders automatically to built-in primitives, but this exporter treats Project MER collision as opt-in. Add the metadata component and enable `Collidable` on the objects that need collision. Avoid making every decorative primitive collidable, as that increases server and client workload.
+
+### A duplicated Unity object has the same Object ID
+
+Validation and export automatically retain the first explicit ID and assign deterministic free IDs to later duplicates. This produces a warning rather than blocking export and does not silently modify the scene. To persist the cleanup, select the export root and choose **Tools → ProjectMER → Repair Duplicate Object IDs**. The repair can be undone through Unity's normal Undo command.
 
 ### The imported hierarchy does not exactly match the original schematic
 

@@ -20,6 +20,7 @@
 - Project MER Animator 名称字段
 - 导入现有 Project MER JSON 进行编辑或检查
 - 导入并再次导出时，无损保留尚未建模的属性和不支持的游戏逻辑块类型
+- 自动且不修改场景地处理因复制 Unity 对象产生的 Object ID 冲突
 - 写入文件前的严格检查
 
 ## 不支持内容
@@ -51,20 +52,20 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 5. 输入：
 
    ```text
-   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1
+   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2
    ```
 
 6. 点击 **Install**，等待 Unity 编译完成。
 7. 确认顶部菜单中出现 **Tools → ProjectMER**。
 
-使用 `#v0.1.1` 可以确保朋友或团队成员安装完全相同的版本。如果希望直接跟随最新 `main` 分支，可以删除版本后缀，但不建议在正式项目中这样做。
+使用 `#v0.1.2` 可以确保朋友或团队成员安装完全相同的版本。如果希望直接跟随最新 `main` 分支，可以删除版本后缀，但不建议在正式项目中这样做。
 
 ### 修改 `Packages/manifest.json` 安装
 
 在项目 `Packages/manifest.json` 的 `dependencies` 对象中加入：
 
 ```json
-"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.1"
+"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2"
 ```
 
 如果它不是第一项，注意上一项末尾必须有英文逗号，保证 JSON 格式正确。
@@ -107,7 +108,7 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 
 常用字段说明：
 
-- `Object Id`：保留 `-1` 即可自动分配。手动填写的子对象 ID 必须大于 0 且不能重复。
+- `Object Id`：保留 `-1` 即可自动分配。手动填写的子对象 ID 应大于 0 且不重复。如果复制 Unity 对象时同时复制了显式 ID，检查和导出会保留第一次出现的 ID，并为后续重复项确定性地分配空闲 ID，同时给出警告。使用 **Tools → ProjectMER → Repair Duplicate Object IDs** 可通过支持 Undo 的操作把后续重复项永久重置为 `-1`。
 - `Animator Name`：写入 Project MER 的 Animator 名称字段；它不会导出 Unity 动画片段或 Controller。
 - `Override Color`：启用后使用元数据颜色，而不是 Renderer 中第一个可用材质颜色。
 - `Visible`：启用几何体的可见标志。
@@ -184,6 +185,10 @@ Project MER 基础几何体只有一种颜色，而 Unity Renderer 可能拥有�
 ### 游戏中的碰撞和 Unity 不同
 
 Unity 会自动给内置基础几何体添加 Collider，但本工具把 Project MER 碰撞设为明确启用。给需要碰撞的物体添加元数据组件并启用 `Collidable`。不要给纯装饰零件全部开启碰撞，否则会增加服务器和客户端负担。
+
+### 复制的 Unity 对象拥有相同的 Object ID
+
+检查和导出会自动保留第一个显式 ID，并为后续重复项确定性地分配空闲 ID。此情况只会产生警告，不再阻止导出，也不会暗中修改场景。若要永久清理，请选择导出根节点并使用 **Tools → ProjectMER → Repair Duplicate Object IDs**；该操作可通过 Unity 的普通 Undo 命令撤销。
 
 ### 导入结果与游戏中的蓝图不完全一致
 

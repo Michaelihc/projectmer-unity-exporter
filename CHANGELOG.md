@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented here.
 
+## [0.1.2] - 2026-08-18
+
+### Fixed
+
+- Automatically assign deterministic free IDs to later duplicate Object ID overrides during validation and export instead of blocking the export.
+- Add **Tools → ProjectMER → Repair Duplicate Object IDs** to persist duplicate-ID repairs as automatic (`-1`) overrides with Unity Undo support.
+
 ## [0.1.1] - 2026-08-18
 
 ### Fixed

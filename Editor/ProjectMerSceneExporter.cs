@@ -56,6 +56,7 @@ namespace Scpsl.ProjectMer.Authoring.Editor
 
         [MenuItem("Tools/ProjectMER/Validate Selected Hierarchy", true)]
         [MenuItem("Tools/ProjectMER/Export Selected Hierarchy...", true)]
+        [MenuItem("Tools/ProjectMER/Repair Duplicate Object IDs", true)]
         private static bool HasSelectedRoot()
         {
             return Selection.activeGameObject != null;
@@ -110,6 +111,65 @@ namespace Scpsl.ProjectMer.Authoring.Editor
 
             Debug.Log(string.Format(CultureInfo.InvariantCulture,
                 "ProjectMER: exported {0} blocks from '{1}' to '{2}'.", plan.Nodes.Count, root.name, path), root);
+        }
+
+        [MenuItem("Tools/ProjectMER/Repair Duplicate Object IDs")]
+        private static void RepairDuplicateObjectIdsFromMenu()
+        {
+            GameObject root = Selection.activeGameObject;
+            if (root == null)
+                return;
+
+            int repaired = RepairDuplicateObjectIds(root);
+            string message = repaired == 0
+                ? "No duplicate Object IDs were found in the selected export hierarchy."
+                : string.Format(CultureInfo.InvariantCulture,
+                    "Reset {0} duplicate Object ID override(s) to automatic (-1).", repaired);
+
+            Debug.Log("ProjectMER: " + message, root);
+            EditorUtility.DisplayDialog("ProjectMER duplicate IDs", message, "OK");
+        }
+
+        /// <summary>
+        /// Resets later duplicate Object ID overrides to automatic assignment. The first occurrence
+        /// in hierarchy order keeps its explicit ID. Ignored subtrees are not considered.
+        /// </summary>
+        public static int RepairDuplicateObjectIds(GameObject root)
+        {
+            if (root == null)
+                throw new ArgumentNullException(nameof(root));
+
+            HashSet<int> used = new HashSet<int> { 0 };
+            List<ProjectMerExportMetadata> duplicates = new List<ProjectMerExportMetadata>();
+            GatherDuplicateIdOverrides(root.transform, true, used, duplicates);
+            if (duplicates.Count == 0)
+                return 0;
+
+            Undo.RecordObjects(duplicates.ToArray(), "Repair ProjectMER duplicate Object IDs");
+            foreach (ProjectMerExportMetadata metadata in duplicates)
+            {
+                metadata.ObjectId = -1;
+                EditorUtility.SetDirty(metadata);
+            }
+
+            return duplicates.Count;
+        }
+
+        private static void GatherDuplicateIdOverrides(
+            Transform current,
+            bool isRoot,
+            ISet<int> used,
+            IList<ProjectMerExportMetadata> duplicates)
+        {
+            ProjectMerExportMetadata metadata = current.GetComponent<ProjectMerExportMetadata>();
+            if (metadata != null && metadata.BlockKind == MerBlockKind.Ignore)
+                return;
+
+            if (!isRoot && metadata != null && metadata.ObjectId > 0 && !used.Add(metadata.ObjectId))
+                duplicates.Add(metadata);
+
+            for (int i = 0; i < current.childCount; i++)
+                GatherDuplicateIdOverrides(current.GetChild(i), false, used, duplicates);
         }
 
         /// <summary>
@@ -356,6 +416,7 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                 return;
 
             HashSet<int> used = new HashSet<int> { 0 };
+            Dictionary<ExportNode, int> reassignedDuplicates = new Dictionary<ExportNode, int>();
             plan.Nodes[0].ObjectId = 0;
 
             ProjectMerExportMetadata rootMetadata = plan.Nodes[0].Metadata;
@@ -377,8 +438,7 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                 }
                 if (!used.Add(metadata.ObjectId))
                 {
-                    plan.Errors.Add("Duplicate Object ID " + metadata.ObjectId.ToString(CultureInfo.InvariantCulture) +
-                        " on '" + plan.Nodes[i].Transform.name + "'.");
+                    reassignedDuplicates.Add(plan.Nodes[i], metadata.ObjectId);
                     continue;
                 }
                 plan.Nodes[i].ObjectId = metadata.ObjectId;
@@ -394,6 +454,14 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                 plan.Nodes[i].ObjectId = nextId;
                 used.Add(nextId);
                 nextId++;
+            }
+
+            foreach (KeyValuePair<ExportNode, int> duplicate in reassignedDuplicates)
+            {
+                plan.Warnings.Add("Duplicate Object ID " + duplicate.Value.ToString(CultureInfo.InvariantCulture) +
+                    " on '" + PathOf(plan.Nodes[0].Transform, duplicate.Key.Transform) +
+                    "' was automatically assigned " + duplicate.Key.ObjectId.ToString(CultureInfo.InvariantCulture) +
+                    " for this export. The scene metadata was not changed; use Tools > ProjectMER > Repair Duplicate Object IDs to persist the repair.");
             }
         }
 
