@@ -12,6 +12,7 @@
 ## 支持内容
 
 - Unity 内置的球体、胶囊体、圆柱体、立方体、平面和 Quad
+- 带有 Project MER `AdminToys.PrimitiveObjectToy` 组件的 Unity GameObject
 - 用作根节点、父节点或动画标记的空 GameObject
 - 聚光灯、方向光和点光源
 - 通过元数据组件配置的 Project MER 文字块
@@ -52,20 +53,20 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 5. 输入：
 
    ```text
-   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2
+   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.2.0
    ```
 
 6. 点击 **Install**，等待 Unity 编译完成。
 7. 确认顶部菜单中出现 **Tools → ProjectMER**。
 
-使用 `#v0.1.2` 可以确保朋友或团队成员安装完全相同的版本。如果希望直接跟随最新 `main` 分支，可以删除版本后缀，但不建议在正式项目中这样做。
+使用 `#v0.2.0` 可以确保朋友或团队成员安装完全相同的版本。如果希望直接跟随最新 `main` 分支，可以删除版本后缀，但不建议在正式项目中这样做。
 
 ### 修改 `Packages/manifest.json` 安装
 
 在项目 `Packages/manifest.json` 的 `dependencies` 对象中加入：
 
 ```json
-"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2"
+"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.2.0"
 ```
 
 如果它不是第一项，注意上一项末尾必须有英文逗号，保证 JSON 格式正确。
@@ -99,7 +100,7 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 
 | 值 | 行为 |
 | --- | --- |
-| `Auto` | 自动识别内置几何体、受支持的 Unity 灯光或空节点。 |
+| `Auto` | 自动识别内置几何体、MER `PrimitiveObjectToy`、受支持的 Unity 灯光或空节点。 |
 | `Empty` | 只导出坐标和层级节点，适合父节点或标记点。 |
 | `Primitive` | 导出为 Project MER 基础几何体。没有可识别的内置网格时，需要启用 `Override Primitive Type`。 |
 | `Light` | 把 Unity Light 导出为 Project MER 灯光块。 |
@@ -116,6 +117,12 @@ Project MER 蓝图描述的是可通过网络同步的 SCP:SL 对象，不包含
 - `Static`：如果该部件需要在运行时移动，应关闭此项。
 - `Light Shape`：选择 MER 灯光源形状元数据。
 - `Text` 和 `Display Size`：配置文字内容和显示尺寸。
+
+如果物体上存在 `AdminToys.PrimitiveObjectToy` 组件，导出器会自动读取它的
+`NetworkPrimitiveType`、`NetworkMaterialColor`、`NetworkPrimitiveFlags` 和 `NetworkIsStatic`
+值。该集成通过运行时检测完成，因此没有安装 SCP:SL AdminToys 程序集的普通 Unity 项目仍可正常编译。
+元数据中显式启用的几何体类型和颜色覆盖拥有更高优先级；添加元数据后，其中的 `Visible`、
+`Collidable` 和 `Static` 字段仍会像处理 Unity 内置几何体一样成为最终导出值。
 
 ### 第三步：检查
 

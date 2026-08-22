@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented here.
 
+## [0.2.0] - 2026-08-22
+
+### Added
+
+- Automatically recognize Unity GameObjects with an `AdminToys.PrimitiveObjectToy` component and export its primitive type, material color, flags, and static state without requiring a compile-time AdminToys dependency.
+
 ## [0.1.2] - 2026-08-18
 
 ### Fixed

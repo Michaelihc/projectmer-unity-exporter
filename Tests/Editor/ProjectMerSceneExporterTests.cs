@@ -120,6 +120,63 @@ namespace Scpsl.ProjectMer.Authoring.Editor.Tests
         }
 
         [Test]
+        public void AutomaticallyExportsMerPrimitiveObjectToyProperties()
+        {
+            GameObject root = CreateObject("root");
+            GameObject primitiveObject = CreateObject("mer-cylinder");
+            primitiveObject.transform.SetParent(root.transform, false);
+            PrimitiveObjectToy primitive = primitiveObject.AddComponent<PrimitiveObjectToy>();
+            primitive.NetworkPrimitiveType = 2;
+            primitive.NetworkMaterialColor = new Color32(0x12, 0x34, 0x56, 0x78);
+            primitive.NetworkPrimitiveFlags = 3;
+            primitive.NetworkIsStatic = false;
+
+            ProjectMerExportResult result = ProjectMerSceneExporter.BuildHierarchyJson(root);
+
+            Assert.That(result.Success, Is.True, string.Join("\n", result.Errors));
+            TestDocument document = JsonUtility.FromJson<TestDocument>(result.Json);
+            TestBlock block = Array.Find(document.Blocks, item => item.Name == "mer-cylinder");
+            Assert.That(block, Is.Not.Null);
+            Assert.That(block.BlockType, Is.EqualTo(1));
+            Assert.That(block.Properties.PrimitiveType, Is.EqualTo(2));
+            Assert.That(block.Properties.Color, Is.EqualTo("#12345678"));
+            Assert.That(block.Properties.PrimitiveFlags, Is.EqualTo(3));
+            Assert.That(block.Properties.Static, Is.False);
+        }
+
+        [Test]
+        public void MetadataOverridesMerPrimitiveObjectToyProperties()
+        {
+            GameObject root = CreateObject("root");
+            GameObject primitiveObject = CreateObject("overridden-mer-primitive");
+            primitiveObject.transform.SetParent(root.transform, false);
+            PrimitiveObjectToy primitive = primitiveObject.AddComponent<PrimitiveObjectToy>();
+            primitive.NetworkPrimitiveType = 0;
+            primitive.NetworkMaterialColor = Color.red;
+            primitive.NetworkPrimitiveFlags = 3;
+            primitive.NetworkIsStatic = false;
+
+            ProjectMerExportMetadata metadata = primitiveObject.AddComponent<ProjectMerExportMetadata>();
+            metadata.OverridePrimitiveType = true;
+            metadata.PrimitiveType = MerPrimitiveType.Quad;
+            metadata.OverrideColor = true;
+            metadata.Color = Color.blue;
+            metadata.Visible = false;
+            metadata.Collidable = true;
+            metadata.Static = true;
+
+            ProjectMerExportResult result = ProjectMerSceneExporter.BuildHierarchyJson(root);
+
+            Assert.That(result.Success, Is.True, string.Join("\n", result.Errors));
+            TestDocument document = JsonUtility.FromJson<TestDocument>(result.Json);
+            TestBlock block = Array.Find(document.Blocks, item => item.Name == "overridden-mer-primitive");
+            Assert.That(block.Properties.PrimitiveType, Is.EqualTo(5));
+            Assert.That(block.Properties.Color, Is.EqualTo("#0000FFFF"));
+            Assert.That(block.Properties.PrimitiveFlags, Is.EqualTo(1));
+            Assert.That(block.Properties.Static, Is.True);
+        }
+
+        [Test]
         public void AutomaticallyAssignsUniqueExportIdsForDuplicatedMetadata()
         {
             GameObject root = CreateObject("root");
@@ -204,10 +261,22 @@ namespace Scpsl.ProjectMer.Authoring.Editor.Tests
         {
             public int PrimitiveType;
             public int PrimitiveFlags;
+            public string Color;
+            public bool Static;
             public int LightType;
             public float Intensity;
             public string Text;
             public Vector2 DisplaySize;
         }
+    }
+
+    // Test double for the optional AdminToys.PrimitiveObjectToy integration. The exporter deliberately
+    // discovers this shape by runtime type/member names so the production package has no AdminToys dependency.
+    internal sealed class PrimitiveObjectToy : MonoBehaviour
+    {
+        public int NetworkPrimitiveType { get; set; }
+        public Color NetworkMaterialColor { get; set; }
+        public byte NetworkPrimitiveFlags { get; set; }
+        public bool NetworkIsStatic { get; set; }
     }
 }

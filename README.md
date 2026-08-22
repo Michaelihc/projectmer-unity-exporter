@@ -12,6 +12,7 @@ It turns a selected Unity hierarchy made from supported primitives, lights, text
 ## What it supports
 
 - Unity built-in Sphere, Capsule, Cylinder, Cube, Plane, and Quad objects
+- Unity GameObjects carrying Project MER's `AdminToys.PrimitiveObjectToy` component
 - Empty GameObjects used as hierarchy roots, parents, or animation markers
 - Spot, Directional, and Point lights
 - Project MER text blocks configured through the metadata component
@@ -52,20 +53,20 @@ The package depends on Unity's `com.unity.nuget.newtonsoft-json` package, which 
 5. Enter:
 
    ```text
-   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2
+   https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.2.0
    ```
 
 6. Click **Install** and wait for Unity to finish compiling.
 7. Confirm that **Tools → ProjectMER** appears in the Unity menu bar.
 
-Pinning `#v0.1.2` keeps every team member on the same version. To follow the latest `main` branch instead, omit the suffix.
+Pinning `#v0.2.0` keeps every team member on the same version. To follow the latest `main` branch instead, omit the suffix.
 
 ### Install by editing `Packages/manifest.json`
 
 Add this entry inside the project's `dependencies` object:
 
 ```json
-"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.1.2"
+"com.scpsl.projectmer-authoring": "https://github.com/Michaelihc/projectmer-unity-exporter.git#v0.2.0"
 ```
 
 Remember to add a comma to the preceding entry when required by JSON syntax.
@@ -99,7 +100,7 @@ Select an object and add **ProjectMER → Export Metadata** in the Inspector's *
 
 | Value | Behavior |
 | --- | --- |
-| `Auto` | Infers a built-in primitive, supported Unity Light, or empty transform. |
+| `Auto` | Infers a built-in primitive, MER `PrimitiveObjectToy`, supported Unity Light, or empty transform. |
 | `Empty` | Exports only the transform and hierarchy node. Useful for parents and markers. |
 | `Primitive` | Exports a Project MER primitive. Enable `Override Primitive Type` if there is no recognizable built-in Unity mesh. |
 | `Light` | Exports a Unity Light as a Project MER light block. |
@@ -116,6 +117,13 @@ Other useful fields:
 - `Static`: disable this for parts that Project MER will move at runtime.
 - `Light Shape`: selects the MER light-source shape metadata.
 - `Text` and `Display Size`: configure a text block.
+
+When an `AdminToys.PrimitiveObjectToy` component is present, the exporter reads its
+`NetworkPrimitiveType`, `NetworkMaterialColor`, `NetworkPrimitiveFlags`, and `NetworkIsStatic`
+values automatically. This integration is discovered at runtime, so projects without the SCP:SL
+AdminToys assemblies still compile normally. Explicit metadata primitive-type and color overrides
+take precedence; when metadata is attached, its `Visible`, `Collidable`, and `Static` fields remain
+authoritative as they are for Unity built-in primitives.
 
 ### 3. Validate
 

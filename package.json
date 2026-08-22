@@ -1,6 +1,6 @@
 {
   "name": "com.scpsl.projectmer-authoring",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "displayName": "Project MER Unity Exporter",
   "description": "Import, validate, author, and export SCP:SL Project MER JSON schematics from Unity hierarchies.",
   "unity": "2021.3",

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -41,10 +42,19 @@ namespace Scpsl.ProjectMer.Authoring.Editor
         {
             public Transform Transform;
             public ProjectMerExportMetadata Metadata;
+            public MerPrimitiveComponentData MerPrimitive;
             public MerBlockKind Kind;
             public int ObjectId;
             public int ParentId;
             public MerPrimitiveType PrimitiveType;
+        }
+
+        private sealed class MerPrimitiveComponentData
+        {
+            public MerPrimitiveType PrimitiveType;
+            public Color Color = Color.white;
+            public int PrimitiveFlags = FlagVisible;
+            public bool Static = true;
         }
 
         private sealed class ExportPlan
@@ -248,11 +258,13 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                 return; // Ignore is deliberately subtree-wide.
             }
 
-            MerBlockKind kind = ResolveKind(root, current, metadata, plan);
+            MerPrimitiveComponentData merPrimitive = ReadMerPrimitiveComponent(root, current, plan);
+            MerBlockKind kind = ResolveKind(root, current, metadata, merPrimitive, plan);
             ExportNode node = new ExportNode
             {
                 Transform = current,
                 Metadata = metadata,
+                MerPrimitive = merPrimitive,
                 Kind = kind,
                 ObjectId = -1,
                 ParentId = -1,
@@ -294,10 +306,14 @@ namespace Scpsl.ProjectMer.Authoring.Editor
             Transform root,
             Transform transform,
             ProjectMerExportMetadata metadata,
+            MerPrimitiveComponentData merPrimitive,
             ExportPlan plan)
         {
             if (metadata != null && metadata.BlockKind != MerBlockKind.Auto)
                 return metadata.BlockKind;
+
+            if (merPrimitive != null)
+                return MerBlockKind.Primitive;
 
             if (transform.GetComponent<Light>() != null)
                 return MerBlockKind.Light;
@@ -338,6 +354,12 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                 return;
             }
 
+            if (node.MerPrimitive != null)
+            {
+                node.PrimitiveType = node.MerPrimitive.PrimitiveType;
+                return;
+            }
+
             MeshFilter meshFilter = node.Transform.GetComponent<MeshFilter>();
             if (meshFilter == null || meshFilter.sharedMesh == null ||
                 !TryMapPrimitive(meshFilter.sharedMesh, out MerPrimitiveType primitiveType))
@@ -356,6 +378,192 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                 plan.Warnings.Add(PathOf(root, node.Transform) +
                     ": ProjectMER primitives have one color; only the first usable material color will be exported.");
             }
+        }
+
+        private static MerPrimitiveComponentData ReadMerPrimitiveComponent(
+            Transform root,
+            Transform transform,
+            ExportPlan plan)
+        {
+            Component[] components = transform.GetComponents<Component>();
+            Component primitiveComponent = null;
+            foreach (Component component in components)
+            {
+                if (component == null || !IsMerPrimitiveComponent(component.GetType()))
+                    continue;
+
+                if (primitiveComponent != null)
+                {
+                    plan.Errors.Add(PathOf(root, transform) +
+                        ": multiple Project MER PrimitiveObjectToy components are ambiguous; keep only one.");
+                    return new MerPrimitiveComponentData();
+                }
+
+                primitiveComponent = component;
+            }
+
+            if (primitiveComponent == null)
+                return null;
+
+            string path = PathOf(root, transform);
+            MerPrimitiveComponentData data = new MerPrimitiveComponentData();
+
+            if (!TryReadIntMember(primitiveComponent, "NetworkPrimitiveType", out int primitiveType))
+            {
+                plan.Errors.Add(path +
+                    ": PrimitiveObjectToy does not expose a readable NetworkPrimitiveType value.");
+            }
+            else if (primitiveType < (int)MerPrimitiveType.Sphere || primitiveType > (int)MerPrimitiveType.Quad)
+            {
+                plan.Errors.Add(path + ": PrimitiveObjectToy uses unsupported NetworkPrimitiveType " +
+                    primitiveType.ToString(CultureInfo.InvariantCulture) + ".");
+            }
+            else
+            {
+                data.PrimitiveType = (MerPrimitiveType)primitiveType;
+            }
+
+            if (!TryReadColorMember(primitiveComponent, "NetworkMaterialColor", out Color color))
+            {
+                plan.Errors.Add(path +
+                    ": PrimitiveObjectToy does not expose a readable NetworkMaterialColor value.");
+            }
+            else
+            {
+                data.Color = color;
+            }
+
+            if (!TryReadIntMember(primitiveComponent, "NetworkPrimitiveFlags", out int primitiveFlags))
+            {
+                plan.Errors.Add(path +
+                    ": PrimitiveObjectToy does not expose a readable NetworkPrimitiveFlags value.");
+            }
+            else if (primitiveFlags < byte.MinValue || primitiveFlags > byte.MaxValue)
+            {
+                plan.Errors.Add(path + ": PrimitiveObjectToy NetworkPrimitiveFlags must fit in one byte.");
+            }
+            else
+            {
+                data.PrimitiveFlags = primitiveFlags;
+            }
+
+            if (TryReadBoolMember(primitiveComponent, "NetworkIsStatic", out bool isStatic))
+            {
+                data.Static = isStatic;
+            }
+            else
+            {
+                plan.Warnings.Add(path +
+                    ": PrimitiveObjectToy does not expose NetworkIsStatic; Static defaults to true.");
+            }
+
+            return data;
+        }
+
+        private static bool IsMerPrimitiveComponent(Type type)
+        {
+            for (Type current = type; current != null; current = current.BaseType)
+            {
+                if (string.Equals(current.FullName, "AdminToys.PrimitiveObjectToy", StringComparison.Ordinal))
+                    return true;
+            }
+
+            // The member check also supports test doubles and compatible namespace relocations without
+            // accepting unrelated components which happen to share this short class name.
+            return string.Equals(type.Name, "PrimitiveObjectToy", StringComparison.Ordinal) &&
+                HasReadableMember(type, "NetworkPrimitiveType") &&
+                HasReadableMember(type, "NetworkMaterialColor") &&
+                HasReadableMember(type, "NetworkPrimitiveFlags");
+        }
+
+        private static bool HasReadableMember(Type type, string name)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            PropertyInfo property = type.GetProperty(name, flags);
+            return (property != null && property.GetIndexParameters().Length == 0 && property.GetGetMethod(true) != null) ||
+                type.GetField(name, flags) != null;
+        }
+
+        private static bool TryReadIntMember(Component component, string name, out int value)
+        {
+            value = 0;
+            if (!TryReadMember(component, name, out object rawValue) || rawValue == null)
+                return false;
+
+            try
+            {
+                value = Convert.ToInt32(rawValue, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryReadBoolMember(Component component, string name, out bool value)
+        {
+            value = false;
+            if (!TryReadMember(component, name, out object rawValue) || rawValue == null)
+                return false;
+
+            try
+            {
+                value = Convert.ToBoolean(rawValue, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryReadColorMember(Component component, string name, out Color value)
+        {
+            value = Color.white;
+            if (!TryReadMember(component, name, out object rawValue) || rawValue == null)
+                return false;
+            if (rawValue is Color color)
+            {
+                value = color;
+                return true;
+            }
+            if (rawValue is Color32 color32)
+            {
+                value = color32;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryReadMember(Component component, string name, out object value)
+        {
+            value = null;
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+            Type type = component.GetType();
+
+            try
+            {
+                PropertyInfo property = type.GetProperty(name, flags);
+                if (property != null && property.GetIndexParameters().Length == 0 && property.GetGetMethod(true) != null)
+                {
+                    value = property.GetValue(component, null);
+                    return true;
+                }
+
+                FieldInfo field = type.GetField(name, flags);
+                if (field != null)
+                {
+                    value = field.GetValue(component);
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            return false;
         }
 
         private static void ValidateLight(Transform root, ExportNode node, ExportPlan plan)
@@ -597,13 +805,18 @@ namespace Scpsl.ProjectMer.Authoring.Editor
                     (node.Metadata.Visible ? FlagVisible : 0);
             }
 
+            if (node.MerPrimitive != null)
+                return node.MerPrimitive.PrimitiveFlags;
+
             Renderer renderer = node.Transform.GetComponent<Renderer>();
             return renderer != null && renderer.enabled ? FlagVisible : 0;
         }
 
         private static bool IsStatic(ExportNode node)
         {
-            return node.Metadata == null || node.Metadata.Static;
+            if (node.Metadata != null)
+                return node.Metadata.Static;
+            return node.MerPrimitive == null || node.MerPrimitive.Static;
         }
 
         private static string ColorOf(ExportNode node)
@@ -615,6 +828,9 @@ namespace Scpsl.ProjectMer.Authoring.Editor
         {
             if (node.Metadata != null && node.Metadata.OverrideColor)
                 return node.Metadata.Color;
+
+            if (node.MerPrimitive != null)
+                return node.MerPrimitive.Color;
 
             if (node.Kind == MerBlockKind.Light)
             {
